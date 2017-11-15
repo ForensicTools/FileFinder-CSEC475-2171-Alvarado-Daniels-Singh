@@ -11,6 +11,9 @@ Purpose: Finds and attempts to recover a deleted file in the NTFS file system
 import ctypes, os, sys
 from io_helper import *
 
+# TODO: Remove this import. It's here for debugging
+import binascii
+
 SECTOR_SIZE=512      # Assume the size of a sector is 512 bytes
 CLUSTER_SIZE=8       # Assume the size of a cluster is 8 sectors
 SECTOR_OFFSET=11     # Offset that tells us # of bytes per sector. 2 bytes
@@ -46,6 +49,7 @@ def getMFTStartIndex():
     # offset in terms of clusters, so convert clusters to bytes
     return SECTOR_SIZE*CLUSTER_SIZE*hexToInt(bootSector[MFT_OFFSET:MFT_OFFSET+8])
 
+## TODO: Add way to determine MFT Size
 
 ## TODO: Optimize Function
 ## TODO: Add way to determine MFT Size, Add threading
@@ -60,22 +64,27 @@ def findMFTRecord(MFTIndex, filename):
     """
     global MFT_ENTRY_SIZE, MFT_MAGIC, ATTR_HEADER
 
-    # Get the first entry from the MFT
-    MFTEntry = read_image(MFTIndex, MFT_ENTRY_SIZE)
+    # Get the first 1000 entries from the MFT
+    # (improves speed over 1 read per entry)
+    MFTEntry = read_image(MFTIndex, MFT_ENTRY_SIZE*1000)
 
     fileIndex = -1
 
-    testcounter = 0
-
     errorFlag = 0
+    MFTCounter = 0
     
     # Loop through all the entries until we find the file or reach the end of
     # the MFT. An MFT entry is identified by the Magic Number "FILE".
-    while(1):
+    while(MFTEntry[:4] == MFT_MAGIC or MFTEntry[:4] == "\x00\x00\x00\x00"):
         # If this is not a proper MFT Entry, skip it
         if(MFTEntry[:4] != MFT_MAGIC):
+            print("Entry with all zeros")
             MFTIndex += MFT_ENTRY_SIZE
-            MFTEntry = read_image(MFTIndex, MFT_ENTRY_SIZE)
+            MFTEntry = MFTEntry[MFT_ENTRY_SIZE:]
+            MFTCounter += 1
+            if(MFTCounter >= 999):
+                MFTEntry = read_image(MFTIndex, MFT_ENTRY_SIZE*1000)
+                MFTCounter = 0
             continue
         
         # The offset of the first attribute section is 2 bytes long and located
@@ -93,8 +102,10 @@ def findMFTRecord(MFTIndex, filename):
             # Avoids infinite loop and breaks out of this loop
             if(attrSect < 1):
                 break
-            # If attrSect > 1024, there is no filename attribute
-            if(attrSect > MFT_ENTRY_SIZE):
+
+            # If attrSect > 1024 or if attrSize is zero,
+            # there is no filename attribute
+            if(attrSect > MFT_ENTRY_SIZE or attrSize == 0):
                 errorFlag = 1
                 break
 
@@ -102,8 +113,12 @@ def findMFTRecord(MFTIndex, filename):
         # the next MFT entry.
         if errorFlag == 1:
             MFTIndex += MFT_ENTRY_SIZE
-            MFTEntry = read_image(MFTIndex, MFT_ENTRY_SIZE)
+            MFTEntry = MFTEntry[MFT_ENTRY_SIZE:]
+            MFTCounter += 1
             errorFlag = 0
+            if(MFTCounter >= 999):
+                MFTEntry = read_image(MFTIndex, MFT_ENTRY_SIZE*1000)
+                MFTCounter = 0
             continue
         
 	# Get the length of the file name in unicode
@@ -111,6 +126,8 @@ def findMFTRecord(MFTIndex, filename):
 	# Get the filename
         nameOffset = attrSect+ATTR_HEADER+NAME_IN_UNI
         MFTFileName = MFTEntry[nameOffset:nameOffset+namelen].replace("\x00", "")
+
+	# TODO: Remove this print. It's here for debugging
         print(MFTFileName)
         if(MFTFileName == filename):
             fileIndex = MFTIndex
@@ -118,9 +135,15 @@ def findMFTRecord(MFTIndex, filename):
         else:
             # Take a look at the next entry
             MFTIndex += MFT_ENTRY_SIZE
-            MFTEntry = read_image(MFTIndex, MFT_ENTRY_SIZE)
-            testcounter += 1
+            MFTEntry = MFTEntry[MFT_ENTRY_SIZE:]
+            MFTCounter += 1
 
+        if(MFTCounter >= 999):
+            MFTEntry = read_image(MFTIndex, MFT_ENTRY_SIZE*1000)
+            MFTCounter = 0
+
+    # TODO: Remove this print. It's here for debugging
+    print(binascii.hexlify(MFTEntry))
     return fileIndex
 
 
