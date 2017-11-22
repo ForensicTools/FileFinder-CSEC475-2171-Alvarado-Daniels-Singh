@@ -100,12 +100,14 @@ def findMFTRecord(MFTIndex, filename):
             attrSect += attrSize
 
             # Avoids infinite loop and breaks out of this loop
+
             if(attrSect < 1):
                 break
 
+
             # If attrSect > 1024 or if attrSize is zero,
             # there is no filename attribute
-            if(attrSect > MFT_ENTRY_SIZE or attrSize == 0):
+            if(attrSect > MFT_ENTRY_SIZE or attrSize == 0 or attrSect < 1):
                 errorFlag = 1
                 break
 
@@ -120,6 +122,15 @@ def findMFTRecord(MFTIndex, filename):
                 MFTEntry = read_image(MFTIndex, MFT_ENTRY_SIZE*1000)
                 MFTCounter = 0
             continue
+
+        # Sometimes there are two $FILE_NAME sections - one with a short name
+        # such as "PLATFO~1" and another one with a longer name such as
+        # "Platform Notifications". Check if there's a longer one
+        fnSectionLen = hexToInt(MFTEntry[attrSect+4:attrSect+8])
+        if(hexToInt(MFTEntry[attrSect+fnSectionLen+0:attrSect+fnSectionLen+4]) ==
+            FILE_SECT):
+            attrSize = hexToInt(MFTEntry[attrSect+4:attrSect+8])
+            attrSect += attrSize
         
 	# Get the length of the file name in unicode
         namelen = hexToInt(MFTEntry[attrSect+ATTR_HEADER+NAME_LEN])*2
@@ -161,6 +172,11 @@ def main():
     if(fileIndex == -1):
         print("No such file matching \"" + filename + "\". Exiting...")
         sys.exit()
+
+    # Otherwise, restore the file
+    # TODO: Restore the file
+    print("Found file")
+    return
 
 
 if(__name__ == '__main__'):
