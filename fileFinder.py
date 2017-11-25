@@ -188,11 +188,32 @@ def recoverData(fileIndex):
 
 
 def main():
+    global systemDrive
+
+    # Get the name of the file to restore and the disk from the user
+    filename = raw_input("[*] Please enter the name of a file to restore: ")
+    disk = raw_input("[*] Please enter the drive the disk is on (default " +
+                     os.getenv("SystemDrive") + "): ")
+
+    # Check drive input
+    if(not len(disk) == 0):
+        try:
+            testDisk = open("\\\\.\\" + disk, "rb")
+            testData = testDisk.read(SECTOR_SIZE)
+            testDisk.close()
+        except IOError:
+            print("You either do not have access to this drive or it doesn't " +
+                  "exist. Exiting...")
+            sys.exit()
+        if(not "NTFS" in testData):
+            print("Selected drive is not formatted as NTFS. Exiting...")
+            sys.exit()
+            
+        # If we made it here, we passed all tests
+        setSystemDrive(disk)
+    
     # Get offset of MFT in number of bytes
     MFTIndex = getMFTStartIndex()
-
-    # Get the name of the file to restore from the user
-    filename = raw_input("[*] Please enter the name of a file to restore: ")
 
     # Get the file's MFT record
     fileIndex = findMFTRecord(MFTIndex, filename)
@@ -203,7 +224,7 @@ def main():
         sys.exit()
 
     # Otherwise, restore the file
-    print("[+] Found file")
+    print("[+] Found file. Attempting to recover data...")
 
     # Read the file
     fileData = recoverData(fileIndex)
