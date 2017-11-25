@@ -58,5 +58,5 @@ HUGE shout-out to [ntfs.com](http://ntfs.com) and this
 [ntfs disk forensics site](http://www.cse.scu.edu/~tschwarz/coen252_07Fall/Lectures/NTFS.html).
 
 ## Contributers
-Joncarlo Alvarado
-Thomas Daniels
+* Joncarlo Alvarado
+* Thomas Daniels
