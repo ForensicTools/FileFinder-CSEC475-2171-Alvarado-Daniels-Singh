@@ -1,6 +1,6 @@
 """
 File: fileFinder.py
-Author(s): Tom Daniels, Joncarlo Alvarado
+Author(s): Tom Daniels, Joncarlo Alvarado, Ikaagarjot Hothi
 Purpose: Finds and attempts to recover a deleted file in the NTFS file system
 """
 ################################################################################
@@ -10,9 +10,6 @@ Purpose: Finds and attempts to recover a deleted file in the NTFS file system
 ################################################################################
 import ctypes, os, sys
 from io_helper import *
-
-# TODO: Remove this import. It's here for debugging
-import binascii
 
 SECTOR_SIZE=512      # Assume the size of a sector is 512 bytes
 CLUSTER_SIZE=8       # Assume the size of a cluster is 8 sectors
@@ -49,8 +46,6 @@ def getMFTStartIndex():
     # offset in terms of clusters, so convert clusters to bytes
     return SECTOR_SIZE*CLUSTER_SIZE*hexToInt(bootSector[MFT_OFFSET:MFT_OFFSET+8])
 
-## TODO: Add way to determine MFT Size
-
 def findMFTRecord(MFTIndex, filename):
     """
     Purpose: Searches for an MFT record with the given file name
@@ -74,7 +69,6 @@ def findMFTRecord(MFTIndex, filename):
     while(MFTEntry[:4] == MFT_MAGIC or MFTEntry[:4] == "\x00\x00\x00\x00"):
         # If this is not a proper MFT Entry, skip it
         if(MFTEntry[:4] != MFT_MAGIC):
-            #print("Entry with all zeros")
             MFTIndex += MFT_ENTRY_SIZE
             MFTEntry = MFTEntry[MFT_ENTRY_SIZE:]
             MFTCounter += 1
@@ -128,8 +122,7 @@ def findMFTRecord(MFTIndex, filename):
 	# Get the filename
         nameOffset = attrSect+ATTR_HEADER+NAME_IN_UNI
         MFTFileName = MFTEntry[nameOffset:nameOffset+namelen].replace("\x00", "")
-	# TODO: Remove this print. It's here for debugging
-        #print(MFTFileName)
+
         if(MFTFileName == filename):
             fileIndex = MFTIndex
             break
