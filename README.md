@@ -52,6 +52,7 @@ and *then* deleted would be a huge plus.
 * Improve speed by checking to see if the file is marked for deletion before checking the
 $FILE_NAME section.
 * Include a Powershell script to download and install python 2.7+ for the user
+* Get it to work with fragmented files
 
 ## Resources
 
