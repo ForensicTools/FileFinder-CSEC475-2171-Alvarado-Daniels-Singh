@@ -45,6 +45,8 @@ drive.
 fails to read 10,000 records, but works for smaller amounts such as 1,000 records. Permanently
 using 1,000 as the default number of records to read slows the file search considerably on
 larger drive so that is not a solution to this issue.
+* While it works with resident and non-resident $DATA sections, FileFinder DOES NOT WORK WITH
+FRAGMENTED FILES
 
 ## Future Plans
 
