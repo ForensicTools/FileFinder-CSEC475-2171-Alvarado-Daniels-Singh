@@ -39,12 +39,8 @@ But in a much more real sense:
 * If you're currently running any programs from the disk you
 lost the file on, it's likely your file is already gone. For example, when I delete a
 file and then try to find it while Google Chrome is running, I am unsuccessful in recovering
-the file. I have no such issues when I try to recover a file from an NTFS formatted USB flash
-drive.
-* If you attempt to recover a file from a small NTFS formatted USB drive, the current method
-fails to read 10,000 records, but works for smaller amounts such as 1,000 records. Permanently
-using 1,000 as the default number of records to read slows the file search considerably on
-larger drive so that is not a solution to this issue.
+the file. The issue appears to not occur when Chrome is closed. I have no such issues when I
+try to recover a file from an NTFS formatted USB flash drive.
 * While it works with resident and non-resident $DATA sections, FileFinder DOES NOT WORK WITH
 FRAGMENTED FILES
 
@@ -53,7 +49,6 @@ FRAGMENTED FILES
 * Because most people delete files from the recycle bin and don't permanently delete them using
 Shift + delete, adding support for finding files that were first moved to the recycle bin
 and *then* deleted would be a huge plus.
-* Add options to search a different disk (other than the C: drive)
 * Improve speed by checking to see if the file is marked for deletion before checking the
 $FILE_NAME section.
 
