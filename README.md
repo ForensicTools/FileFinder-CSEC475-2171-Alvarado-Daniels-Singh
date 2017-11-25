@@ -60,3 +60,4 @@ HUGE shout-out to [ntfs.com](http://ntfs.com) and this
 ## Contributers
 * Joncarlo Alvarado
 * Thomas Daniels
+* Ikaagarjot Singh
