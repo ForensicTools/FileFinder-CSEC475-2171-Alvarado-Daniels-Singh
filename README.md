@@ -53,6 +53,7 @@ and *then* deleted would be a huge plus.
 $FILE_NAME section.
 * Include a Powershell script to download and install python 2.7+ for the user
 * Get it to work with fragmented files
+* Test it with directories
 
 ## Resources
 
