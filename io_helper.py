@@ -1,11 +1,12 @@
-
 """
 File: io_helper.py
 Purpose: Holds functions to take care of annoying lower level tasks
-Author(s): Joncarlo Alvarado, Thomas Daniels 
+Authors: Joncarlo Alvarado, Thomas Daniels, Ikaagarjot Hothi
 """
 
 import os
+# Builds the string specifying the primary parition's file path.
+systemDrive = '\\\\.\\' + os.getenv('SystemDrive')
 
 def read_image(offset, size=512):
     """
@@ -16,15 +17,14 @@ def read_image(offset, size=512):
     @return  (str) the data on that part of the disk
     """
 
-    # Builds the string specifying the primary parition's file path.
-    systemDrive = '\\\\.\\' + os.getenv('SystemDrive')
-
     # Opens the primary partition, seeks to a offset, and then
     # returns the amout of bytes specified by the size parameter.
     image = open(systemDrive, 'rb')
     image.seek(offset)
+    data = image.read(size)
+    image.close()
 
-    return image.read(size)
+    return data
 
 	
 def hexToInt(hexString):
@@ -43,3 +43,15 @@ def hexToInt(hexString):
         result = hexChar + result
 
     return int(result, 16)
+
+def setSystemDrive(drive):
+    """
+    Purpose: Sets the systemDrive variable so we read from the correct disk
+    @param   (str) drive - the drive we want to read from (C:, D:, E:, etc)
+    @return  (None)
+    """
+    global systemDrive
+
+    systemDrive = "\\\\.\\" + drive
+    print("[+] System drive successfully changed to " + systemDrive)
+    return
