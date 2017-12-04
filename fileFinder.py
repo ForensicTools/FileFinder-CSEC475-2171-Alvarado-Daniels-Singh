@@ -1,6 +1,6 @@
 """
 File: fileFinder.py
-Author(s): Tom Daniels, Joncarlo Alvarado
+Author(s): Tom Daniels, Joncarlo Alvarado, Ikaagarjot Hothi
 Purpose: Finds and attempts to recover a deleted file in the NTFS file system
 """
 ################################################################################
@@ -11,9 +11,6 @@ Purpose: Finds and attempts to recover a deleted file in the NTFS file system
 import ctypes, os, sys
 from io_helper import *
 
-# TODO: Remove this import. It's here for debugging
-import binascii
-
 SECTOR_SIZE=512      # Assume the size of a sector is 512 bytes
 CLUSTER_SIZE=8       # Assume the size of a cluster is 8 sectors
 SECTOR_OFFSET=11     # Offset that tells us # of bytes per sector. 2 bytes
@@ -21,7 +18,8 @@ CLUSTER_OFFSET=13    # Offset that tells us # of sectors per cluster. 1 byte
 MFT_OFFSET=48        # Offset that tells us which cluster MFT starts at. 8 bytes
 MFT_ENTRY_SIZE=1024  # The size, in bytes, of an MFT
 MFT_MAGIC="FILE"     # The magic number for MFT entries
-FILE_SECT=48         # The file name section has, among other things, the file name
+FILE_SECT=48         # The identifier for the $FILE_NAME section
+DATA_SECT=128        # The identifier for the $DATA section
 ATTR_HEADER=24       # The size of the attribute headers
 NAME_IN_UNI=66       # The offset into $FILE_NAME that the file's name is
 NAME_LEN=64          # The offset into $FILE_NAME where the length of the file name is
@@ -48,8 +46,6 @@ def getMFTStartIndex():
     # offset in terms of clusters, so convert clusters to bytes
     return SECTOR_SIZE*CLUSTER_SIZE*hexToInt(bootSector[MFT_OFFSET:MFT_OFFSET+8])
 
-## TODO: Add way to determine MFT Size
-
 def findMFTRecord(MFTIndex, filename):
     """
     Purpose: Searches for an MFT record with the given file name
@@ -73,12 +69,11 @@ def findMFTRecord(MFTIndex, filename):
     while(MFTEntry[:4] == MFT_MAGIC or MFTEntry[:4] == "\x00\x00\x00\x00"):
         # If this is not a proper MFT Entry, skip it
         if(MFTEntry[:4] != MFT_MAGIC):
-            print("Entry with all zeros")
             MFTIndex += MFT_ENTRY_SIZE
             MFTEntry = MFTEntry[MFT_ENTRY_SIZE:]
             MFTCounter += 1
             if(MFTCounter >= 999):
-                MFTEntry = read_image(MFTIndex, MFT_ENTRY_SIZE*1000)
+                MFTEntry = read_image(MFTIndex, MFT_ENTRY_SIZE*10000)
                 MFTCounter = 0
             continue
         
@@ -109,7 +104,7 @@ def findMFTRecord(MFTIndex, filename):
             MFTCounter += 1
             errorFlag = 0
             if(MFTCounter >= 999):
-                MFTEntry = read_image(MFTIndex, MFT_ENTRY_SIZE*1000)
+                MFTEntry = read_image(MFTIndex, MFT_ENTRY_SIZE*10000)
                 MFTCounter = 0
             continue
 
@@ -127,8 +122,7 @@ def findMFTRecord(MFTIndex, filename):
 	# Get the filename
         nameOffset = attrSect+ATTR_HEADER+NAME_IN_UNI
         MFTFileName = MFTEntry[nameOffset:nameOffset+namelen].replace("\x00", "")
-	# TODO: Remove this print. It's here for debugging
-        print(MFTFileName)
+
         if(MFTFileName == filename):
             fileIndex = MFTIndex
             break
@@ -142,34 +136,103 @@ def findMFTRecord(MFTIndex, filename):
             MFTEntry = read_image(MFTIndex, MFT_ENTRY_SIZE*1000)
             MFTCounter = 0
 
-    # TODO: Remove this print. It's here for debugging
-    print(binascii.hexlify(MFTEntry))
     return fileIndex
 
 
+def recoverData(fileIndex):
+    """
+    Purpose: Extracts the contents of a file given the offset of the MFT record
+             from the beginning of the drive in bytes. Note that this function
+             fails with fragmented files.
+    @param   (long) fileIndex - number of bytes from the beginning of the disk
+             until the MFT record of a particular file.
+    @return  (str) the contents of the file
+    """
+    MFTEntry = read_image(fileIndex, 1024)
+
+    # The offset of the first attribute section is 2 bytes long and located
+    # at 0x14 from the beginning of the MFT entry
+    attrSect = hexToInt(MFTEntry[20:22])
+
+    # The first 4 bytes of an attribute section tell us what kind of
+    # attribute section we're dealing with. If we're dealing with the
+    # $FILE_NAME section, we want to extract the filename. Otherwise,
+    # we want to find the next attribute section
+    while(not hexToInt(MFTEntry[attrSect:attrSect+4]) == DATA_SECT):
+        attrSize = hexToInt(MFTEntry[attrSect+4:attrSect+8])
+        attrSect += attrSize
+
+    # Determine if the data is non-resident. The bool for this is at offset 8
+    if(hexToInt(MFTEntry[attrSect+8])):  # Non-resident
+        # Convert length of the data run from # of clusters to # of bytes
+        runSize = hexToInt(MFTEntry[attrSect+65])*SECTOR_SIZE*CLUSTER_SIZE
+
+        # Convert the starting cluster number to bytes
+        runOffset = hexToInt(MFTEntry[attrSect+66:attrSect+69])*SECTOR_SIZE*CLUSTER_SIZE
+
+        # Get the size of the data
+        dataSize = hexToInt(MFTEntry[attrSect+48:attrSect+56])
+        return read_image(runOffset, runSize)[:dataSize]
+    
+    else:  # Resident
+        # Get the size of the resident data (4 bytes at offset 0x10)
+        dataSize = hexToInt(MFTEntry[attrSect+16:attrSect+20])
+        return MFTEntry[ATTR_HEADER+attrSect:ATTR_HEADER+attrSect+dataSize]
+
+
 def main():
+    global systemDrive
+
+    # Get the name of the file to restore and the disk from the user
+    filename = raw_input("[*] Please enter the name of a file to restore: ")
+    disk = raw_input("[*] Please enter the drive the disk is on (default " +
+                     os.getenv("SystemDrive") + "): ")
+
+    # Check drive input
+    if(not len(disk) == 0):
+        try:
+            testDisk = open("\\\\.\\" + disk, "rb")
+            testData = testDisk.read(SECTOR_SIZE)
+            testDisk.close()
+        except IOError:
+            print("You either do not have access to this drive or it doesn't " +
+                  "exist. Exiting...")
+            sys.exit()
+        if(not "NTFS" in testData):
+            print("Selected drive is not formatted as NTFS. Exiting...")
+            sys.exit()
+            
+        # If we made it here, we passed all tests
+        setSystemDrive(disk)
+    
     # Get offset of MFT in number of bytes
     MFTIndex = getMFTStartIndex()
-
-    # Get the name of the file to restore from the user
-    filename = raw_input("Please enter the name of a file to restore: ")
 
     # Get the file's MFT record
     fileIndex = findMFTRecord(MFTIndex, filename)
 
     # fileIndex = -1 means we didn't find any record matching that filename =(
     if(fileIndex == -1):
-        print("No such file matching \"" + filename + "\". Exiting...")
+        print("[-] No such file matching \"" + filename + "\". Exiting...")
         sys.exit()
 
     # Otherwise, restore the file
-    # TODO: Restore the file
-    print("Found file")
+    print("[+] Found file. Attempting to recover data...")
+
+    # Read the file
+    fileData = recoverData(fileIndex)
+
+    # Restore the file
+    newFile = open(filename, 'w')
+    newFile.write(fileData)
+    newFile.close()
+    print("[+] File restored to: " + os.getcwd() + "\\" + filename)
+
     return
 
 
 if(__name__ == '__main__'):
     if(not ctypes.windll.shell32.IsUserAnAdmin()):
-        print("Error, you must be an administrator to use this program")
+        print("[-] Error, you must be an administrator to use this program")
         sys.exit()
     main()
